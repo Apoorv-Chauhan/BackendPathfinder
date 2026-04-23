@@ -14,28 +14,32 @@ export const listPosts = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const groupId =
-      typeof _req.query.groupId === "string" ? _req.query.groupId : null;
+    const groupId = typeof _req.query.groupId === "string" ? _req.query.groupId : null;
+    const cursor = typeof _req.query.cursor === "string" ? _req.query.cursor : null;
+    const limit = 20;
 
-    const fetchLimit = 400;
-    const snapshot = await db
-      .collection("posts")
-      .orderBy("createdAt", "desc")
-      .limit(fetchLimit)
-      .get();
-    let posts = snapshot.docs.map((doc) => ({
+    let query: FirebaseFirestore.Query = db.collection("posts");
+
+    if (groupId) {
+      query = query.where("groupId", "==", groupId);
+    } else {
+      query = query.where("groupId", "==", null);
+    }
+
+    query = query.orderBy("createdAt", "desc");
+
+    if (cursor) {
+      query = query.startAfter(cursor);
+    }
+
+    const snapshot = await query.limit(limit).get();
+    
+    const posts = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     })) as Array<{ id: string } & PostDocument>;
 
-    if (groupId === null) {
-      posts = posts.filter((p) => p.groupId == null);
-    } else if (groupId) {
-      posts = posts.filter((p) => p.groupId === groupId);
-    }
-
-    posts = posts.slice(0, 100);
-    res.status(200).json(posts);
+    res.status(200).json({ posts, nextCursor: posts.length === limit ? posts[posts.length - 1].createdAt : null });
   } catch (error: unknown) {
     if (error instanceof Error) {
       res.status(500).json({ message: error.message });
