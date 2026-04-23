@@ -69,10 +69,23 @@ export interface InterviewSessionDocument {
   inviterId: string;
   inviteeId: string;
   proposedTimes: string;
+  meetingLink: string;
+  message?: string;
   topic?: string;
   status: 'pending' | 'accepted' | 'confirmed' | 'declined' | 'completed' | 'cancelled';
   createdAt: string;
   updatedAt: string;
+  
+  // Denormalized profile data for easy UI rendering
+  inviterName?: string;
+  inviterEmail?: string;
+  inviterAvatar?: string;
+  inviterRole?: string;
+  
+  inviteeName?: string;
+  inviteeEmail?: string;
+  inviteeAvatar?: string;
+  inviteeRole?: string;
 }
 
 export interface FeedbackDocument {

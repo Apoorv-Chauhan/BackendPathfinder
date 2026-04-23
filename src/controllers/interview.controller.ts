@@ -7,7 +7,19 @@ import { getString, requireUser } from '../utils/request';
 interface CreateSessionBody {
   inviteeId: string;
   proposedTimes: string;
+  meetingLink: string;
+  message?: string;
   topic?: string;
+  
+  inviterName?: string;
+  inviterEmail?: string;
+  inviterAvatar?: string;
+  inviterRole?: string;
+  
+  inviteeName?: string;
+  inviteeEmail?: string;
+  inviteeAvatar?: string;
+  inviteeRole?: string;
 }
 
 interface UpdateSessionStatusBody {
@@ -59,12 +71,26 @@ export const createSession = async (req: Request, res: Response): Promise<void> 
       inviterId: user.uid,
       inviteeId,
       proposedTimes,
+      meetingLink: getString((body as any).meetingLink, 'meetingLink'),
       status: 'pending',
       createdAt: now,
       updatedAt: now,
     };
+    
+    if (body.inviterName !== undefined) payload.inviterName = body.inviterName;
+    if (body.inviterEmail !== undefined) payload.inviterEmail = body.inviterEmail;
+    if (body.inviterAvatar !== undefined) payload.inviterAvatar = body.inviterAvatar;
+    if (body.inviterRole !== undefined) payload.inviterRole = body.inviterRole;
+    if (body.inviteeName !== undefined) payload.inviteeName = body.inviteeName;
+    if (body.inviteeEmail !== undefined) payload.inviteeEmail = body.inviteeEmail;
+    if (body.inviteeAvatar !== undefined) payload.inviteeAvatar = body.inviteeAvatar;
+    if (body.inviteeRole !== undefined) payload.inviteeRole = body.inviteeRole;
+
     if (typeof body.topic === 'string' && body.topic.trim().length > 0) {
       payload.topic = body.topic.trim();
+    }
+    if (typeof body.message === 'string' && body.message.trim().length > 0) {
+      payload.message = body.message.trim();
     }
 
     const docRef = await db.collection('mockInterviews').add(payload);

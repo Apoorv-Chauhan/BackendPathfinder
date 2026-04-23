@@ -1,55 +1,82 @@
-import type { Request, Response } from 'express';
-import { db } from '../config/firebase';
-import { firestoreAdmin } from '../config/firebase';
-import type { CommentDocument, CreatePostBody, PostDocument } from '../types/models';
-import { ApiError } from '../utils/api-error';
-import { getString, requireUser } from '../utils/request';
+import type { Request, Response } from "express";
+import { db } from "../config/firebase";
+import { firestoreAdmin } from "../config/firebase";
+import type {
+  CommentDocument,
+  CreatePostBody,
+  PostDocument,
+} from "../types/models";
+import { ApiError } from "../utils/api-error";
+import { getString, requireUser } from "../utils/request";
 
-export const listPosts = async (_req: Request, res: Response): Promise<void> => {
+export const listPosts = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
   try {
-    const groupId = typeof _req.query.groupId === 'string' ? _req.query.groupId : null;
-    let queryRef = db.collection('posts').orderBy('createdAt', 'desc').limit(100);
+    const groupId =
+      typeof _req.query.groupId === "string" ? _req.query.groupId : null;
+
+    const fetchLimit = 400;
+    const snapshot = await db
+      .collection("posts")
+      .orderBy("createdAt", "desc")
+      .limit(fetchLimit)
+      .get();
+    let posts = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Array<{ id: string } & PostDocument>;
+
     if (groupId === null) {
-      queryRef = queryRef.where('groupId', '==', null);
+      posts = posts.filter((p) => p.groupId == null);
     } else if (groupId) {
-      queryRef = queryRef.where('groupId', '==', groupId);
+      posts = posts.filter((p) => p.groupId === groupId);
     }
-    const snapshot = await queryRef.get();
-    const posts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    posts = posts.slice(0, 100);
     res.status(200).json(posts);
   } catch (error: unknown) {
     if (error instanceof Error) {
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to list posts' });
+    res.status(500).json({ message: "Failed to list posts" });
   }
 };
 
-export const createPost = async (req: Request, res: Response): Promise<void> => {
+export const createPost = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
     const body = req.body as CreatePostBody;
-    const content = getString(body.content, 'content');
+    const content = getString(body.content, "content");
     const now = new Date().toISOString();
+    // const now = firestoreAdmin.FieldValue.serverTimestamp();
 
-    const userDoc = await db.collection('users').doc(user.uid).get();
-    const authorName = userDoc.exists ? String(userDoc.data()?.name ?? 'User') : 'User';
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const authorName = userDoc.exists
+      ? String(userDoc.data()?.name ?? "User")
+      : "User";
 
     const payload: PostDocument = {
       authorId: user.uid,
       authorName,
       authorEmail: user.email,
       content,
-      tags: Array.isArray(body.tags) ? body.tags.filter((tag) => typeof tag === 'string') : [],
-      groupId: typeof body.groupId === 'string' ? body.groupId : null,
+      tags: Array.isArray(body.tags)
+        ? body.tags.filter((tag) => typeof tag === "string")
+        : [],
+      groupId: typeof body.groupId === "string" ? body.groupId : null,
       likeCount: 0,
       commentCount: 0,
       createdAt: now,
       updatedAt: now,
     };
 
-    const docRef = await db.collection('posts').add(payload);
+    const docRef = await db.collection("posts").add(payload);
     res.status(201).json({ id: docRef.id, ...payload });
   } catch (error: unknown) {
     if (error instanceof ApiError) {
@@ -60,23 +87,26 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to create post' });
+    res.status(500).json({ message: "Failed to create post" });
   }
 };
 
-export const toggleLike = async (req: Request, res: Response): Promise<void> => {
+export const toggleLike = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
-    const postId = getString(req.params.postId, 'postId');
-    const postRef = db.collection('posts').doc(postId);
-    const likeRef = postRef.collection('likes').doc(user.uid);
+    const postId = getString(req.params.postId, "postId");
+    const postRef = db.collection("posts").doc(postId);
+    const likeRef = postRef.collection("likes").doc(user.uid);
 
     let likeCount = 0;
     let likedByMe = false;
     await db.runTransaction(async (transaction) => {
       const postDoc = await transaction.get(postRef);
       if (!postDoc.exists) {
-        throw new ApiError(404, 'Post not found');
+        throw new ApiError(404, "Post not found");
       }
 
       const likeDoc = await transaction.get(likeRef);
@@ -91,7 +121,10 @@ export const toggleLike = async (req: Request, res: Response): Promise<void> => 
           updatedAt: new Date().toISOString(),
         });
       } else {
-        transaction.set(likeRef, { userId: user.uid, createdAt: new Date().toISOString() });
+        transaction.set(likeRef, {
+          userId: user.uid,
+          createdAt: new Date().toISOString(),
+        });
         likeCount = currentLikeCount + 1;
         likedByMe = true;
         transaction.update(postRef, {
@@ -101,7 +134,9 @@ export const toggleLike = async (req: Request, res: Response): Promise<void> => 
       }
     });
 
-    res.status(200).json({ message: 'Like state updated', likeCount, likedByMe });
+    res
+      .status(200)
+      .json({ message: "Like state updated", likeCount, likedByMe });
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       res.status(error.statusCode).json({ message: error.message });
@@ -111,24 +146,30 @@ export const toggleLike = async (req: Request, res: Response): Promise<void> => 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to update like' });
+    res.status(500).json({ message: "Failed to update like" });
   }
 };
 
-export const updatePost = async (req: Request, res: Response): Promise<void> => {
+export const updatePost = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
-    const postId = getString(req.params.postId, 'postId');
-    const content = getString((req.body as Record<string, unknown>).content, 'content');
-    const postRef = db.collection('posts').doc(postId);
+    const postId = getString(req.params.postId, "postId");
+    const content = getString(
+      (req.body as Record<string, unknown>).content,
+      "content",
+    );
+    const postRef = db.collection("posts").doc(postId);
     const postDoc = await postRef.get();
     if (!postDoc.exists) {
-      throw new ApiError(404, 'Post not found');
+      throw new ApiError(404, "Post not found");
     }
 
     const postData = postDoc.data() as PostDocument;
     if (postData.authorId !== user.uid) {
-      throw new ApiError(403, 'Only author can update post');
+      throw new ApiError(403, "Only author can update post");
     }
 
     const updatedAt = new Date().toISOString();
@@ -143,25 +184,28 @@ export const updatePost = async (req: Request, res: Response): Promise<void> => 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to update post' });
+    res.status(500).json({ message: "Failed to update post" });
   }
 };
 
-export const deletePost = async (req: Request, res: Response): Promise<void> => {
+export const deletePost = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
-    const postId = getString(req.params.postId, 'postId');
-    const postRef = db.collection('posts').doc(postId);
+    const postId = getString(req.params.postId, "postId");
+    const postRef = db.collection("posts").doc(postId);
     const postDoc = await postRef.get();
     if (!postDoc.exists) {
-      throw new ApiError(404, 'Post not found');
+      throw new ApiError(404, "Post not found");
     }
     const postData = postDoc.data() as PostDocument;
     if (postData.authorId !== user.uid) {
-      throw new ApiError(403, 'Only author can delete post');
+      throw new ApiError(403, "Only author can delete post");
     }
     await postRef.delete();
-    res.status(200).json({ message: 'Post deleted' });
+    res.status(200).json({ message: "Post deleted" });
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       res.status(error.statusCode).json({ message: error.message });
@@ -171,17 +215,22 @@ export const deletePost = async (req: Request, res: Response): Promise<void> => 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to delete post' });
+    res.status(500).json({ message: "Failed to delete post" });
   }
 };
 
-export const addComment = async (req: Request, res: Response): Promise<void> => {
+export const addComment = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
-    const postId = getString(req.params.postId, 'postId');
-    const text = getString((req.body as Record<string, unknown>).text, 'text');
-    const userDoc = await db.collection('users').doc(user.uid).get();
-    const authorName = userDoc.exists ? String(userDoc.data()?.name ?? 'User') : 'User';
+    const postId = getString(req.params.postId, "postId");
+    const text = getString((req.body as Record<string, unknown>).text, "text");
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const authorName = userDoc.exists
+      ? String(userDoc.data()?.name ?? "User")
+      : "User";
     const now = new Date().toISOString();
 
     const commentPayload: CommentDocument = {
@@ -192,14 +241,21 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
       createdAt: now,
     };
 
-    const commentRef = await db.collection('posts').doc(postId).collection('comments').add(commentPayload);
-    await db.collection('posts').doc(postId).set(
-      {
-        commentCount: firestoreAdmin.FieldValue.increment(1),
-        updatedAt: now,
-      },
-      { merge: true },
-    );
+    const commentRef = await db
+      .collection("posts")
+      .doc(postId)
+      .collection("comments")
+      .add(commentPayload);
+    await db
+      .collection("posts")
+      .doc(postId)
+      .set(
+        {
+          commentCount: firestoreAdmin.FieldValue.increment(1),
+          updatedAt: now,
+        },
+        { merge: true },
+      );
 
     res.status(201).json({ id: commentRef.id, ...commentPayload });
   } catch (error: unknown) {
@@ -211,15 +267,26 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to add comment' });
+    res.status(500).json({ message: "Failed to add comment" });
   }
 };
 
-export const listComments = async (req: Request, res: Response): Promise<void> => {
+export const listComments = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
-    const postId = getString(req.params.postId, 'postId');
-    const snapshot = await db.collection('posts').doc(postId).collection('comments').orderBy('createdAt', 'asc').get();
-    const comments = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const postId = getString(req.params.postId, "postId");
+    const snapshot = await db
+      .collection("posts")
+      .doc(postId)
+      .collection("comments")
+      .orderBy("createdAt", "asc")
+      .get();
+    const comments = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
     res.status(200).json(comments);
   } catch (error: unknown) {
     if (error instanceof ApiError) {
@@ -230,26 +297,36 @@ export const listComments = async (req: Request, res: Response): Promise<void> =
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to list comments' });
+    res.status(500).json({ message: "Failed to list comments" });
   }
 };
 
-export const updateComment = async (req: Request, res: Response): Promise<void> => {
+export const updateComment = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
-    const postId = getString(req.params.postId, 'postId');
-    const commentId = getString(req.params.commentId, 'commentId');
-    const text = getString((req.body as Record<string, unknown>).text, 'text');
-    const commentRef = db.collection('posts').doc(postId).collection('comments').doc(commentId);
+    const postId = getString(req.params.postId, "postId");
+    const commentId = getString(req.params.commentId, "commentId");
+    const text = getString((req.body as Record<string, unknown>).text, "text");
+    const commentRef = db
+      .collection("posts")
+      .doc(postId)
+      .collection("comments")
+      .doc(commentId);
     const commentDoc = await commentRef.get();
     if (!commentDoc.exists) {
-      throw new ApiError(404, 'Comment not found');
+      throw new ApiError(404, "Comment not found");
     }
     const commentData = commentDoc.data() as CommentDocument;
     if (commentData.authorId !== user.uid) {
-      throw new ApiError(403, 'Only author can update comment');
+      throw new ApiError(403, "Only author can update comment");
     }
-    await commentRef.set({ text, updatedAt: new Date().toISOString() }, { merge: true });
+    await commentRef.set(
+      { text, updatedAt: new Date().toISOString() },
+      { merge: true },
+    );
     res.status(200).json({ id: commentId, ...commentData, text });
   } catch (error: unknown) {
     if (error instanceof ApiError) {
@@ -260,33 +337,43 @@ export const updateComment = async (req: Request, res: Response): Promise<void> 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to update comment' });
+    res.status(500).json({ message: "Failed to update comment" });
   }
 };
 
-export const deleteComment = async (req: Request, res: Response): Promise<void> => {
+export const deleteComment = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = requireUser(req);
-    const postId = getString(req.params.postId, 'postId');
-    const commentId = getString(req.params.commentId, 'commentId');
-    const commentRef = db.collection('posts').doc(postId).collection('comments').doc(commentId);
+    const postId = getString(req.params.postId, "postId");
+    const commentId = getString(req.params.commentId, "commentId");
+    const commentRef = db
+      .collection("posts")
+      .doc(postId)
+      .collection("comments")
+      .doc(commentId);
     const commentDoc = await commentRef.get();
     if (!commentDoc.exists) {
-      throw new ApiError(404, 'Comment not found');
+      throw new ApiError(404, "Comment not found");
     }
     const commentData = commentDoc.data() as CommentDocument;
     if (commentData.authorId !== user.uid) {
-      throw new ApiError(403, 'Only author can delete comment');
+      throw new ApiError(403, "Only author can delete comment");
     }
     await commentRef.delete();
-    await db.collection('posts').doc(postId).set(
-      {
-        commentCount: firestoreAdmin.FieldValue.increment(-1),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true },
-    );
-    res.status(200).json({ message: 'Comment deleted' });
+    await db
+      .collection("posts")
+      .doc(postId)
+      .set(
+        {
+          commentCount: firestoreAdmin.FieldValue.increment(-1),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+    res.status(200).json({ message: "Comment deleted" });
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       res.status(error.statusCode).json({ message: error.message });
@@ -296,6 +383,6 @@ export const deleteComment = async (req: Request, res: Response): Promise<void> 
       res.status(500).json({ message: error.message });
       return;
     }
-    res.status(500).json({ message: 'Failed to delete comment' });
+    res.status(500).json({ message: "Failed to delete comment" });
   }
 };
