@@ -25,7 +25,7 @@ export const listPosts = async (
     }
 
     const snapshot = await query.limit(100).get();
-    
+
     let posts = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
@@ -36,7 +36,7 @@ export const listPosts = async (
     } else {
       posts = posts.filter(p => p.groupId == null);
     }
-    
+
     const nextCursor = snapshot.docs.length === 100 ? (snapshot.docs[snapshot.docs.length - 1]?.data().createdAt ?? null) : null;
 
     posts = posts.slice(0, limit);
