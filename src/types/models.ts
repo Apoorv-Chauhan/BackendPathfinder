@@ -132,3 +132,21 @@ export interface MessageDocument {
   readBy: string[];
   createdAt: string;
 }
+
+export interface GroupDocument {
+  id: string;
+  name: string;
+  description: string;
+  ownerId: string;
+  members: string[];
+  memberIds: string[];
+  memberProfiles: Record<string, any>;
+  memberCount: number;
+  blockedMembers: string[];
+  blockedMemberIds: string[];
+  visibility: string;
+  tags?: string[];
+  rules?: string[];
+  coverImage?: string;
+  createdAt: string;
+}
