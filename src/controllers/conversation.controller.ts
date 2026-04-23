@@ -34,9 +34,9 @@ export const listConversations = async (req: Request, res: Response): Promise<vo
 export const ensureConversation = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = requireUser(req);
-    const body = req.body as { recipientId?: string; recipientName: string; recipientAvatar?: string };
-    const recipientName = getString(body.recipientName, 'recipientName');
-    const recipientId = body.recipientId || null;
+    const body = req.body as { id?: string; name: string; avatar?: string };
+    const recipientName = getString(body.name, 'name');
+    const recipientId = body.id || null;
     
     if (recipientId === user.uid) {
       throw new ApiError(400, 'Cannot start a conversation with your own account');
@@ -83,7 +83,7 @@ export const ensureConversation = async (req: Request, res: Response): Promise<v
     
     const recipientProfile = {
       name: recipientName,
-      avatar: body.recipientAvatar || recipientName.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase(),
+      avatar: body.avatar || recipientName.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase(),
       email: '',
     };
     

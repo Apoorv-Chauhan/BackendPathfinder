@@ -18,28 +18,30 @@ export const listPosts = async (
     const cursor = typeof _req.query.cursor === "string" ? _req.query.cursor : null;
     const limit = 20;
 
-    let query: FirebaseFirestore.Query = db.collection("posts");
-
-    if (groupId) {
-      query = query.where("groupId", "==", groupId);
-    } else {
-      query = query.where("groupId", "==", null);
-    }
-
-    query = query.orderBy("createdAt", "desc");
+    let query: FirebaseFirestore.Query = db.collection("posts").orderBy("createdAt", "desc");
 
     if (cursor) {
       query = query.startAfter(cursor);
     }
 
-    const snapshot = await query.limit(limit).get();
+    const snapshot = await query.limit(100).get();
     
-    const posts = snapshot.docs.map((doc) => ({
+    let posts = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     })) as Array<{ id: string } & PostDocument>;
 
-    res.status(200).json({ posts, nextCursor: posts.length === limit ? (posts[posts.length - 1]?.createdAt ?? null) : null });
+    if (groupId) {
+      posts = posts.filter(p => p.groupId === groupId);
+    } else {
+      posts = posts.filter(p => p.groupId == null);
+    }
+    
+    const nextCursor = snapshot.docs.length === 100 ? (snapshot.docs[snapshot.docs.length - 1]?.data().createdAt ?? null) : null;
+
+    posts = posts.slice(0, limit);
+
+    res.status(200).json({ posts, nextCursor });
   } catch (error: unknown) {
     if (error instanceof Error) {
       res.status(500).json({ message: error.message });

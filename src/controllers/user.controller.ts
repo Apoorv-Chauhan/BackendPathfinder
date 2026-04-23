@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { db } from '../config/firebase';
 import type { UserProfile } from '../types/models';
 import { ApiError } from '../utils/api-error';
-import { requireUser } from '../utils/request';
+import { getString, requireUser } from '../utils/request';
 
 const nowIso = (): string => new Date().toISOString();
 
@@ -167,5 +167,48 @@ export const getMyInviteEligibility = async (req: Request, res: Response): Promi
       return;
     }
     res.status(500).json({ message: 'Failed to load invite eligibility' });
+  }
+};
+
+export const listUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = requireUser(req);
+    const eligibleOnly = req.query.eligibleOnly === 'true';
+
+    let query: FirebaseFirestore.Query = db.collection('users');
+    if (eligibleOnly) {
+      query = query.where('is_available_for_interview', '==', true);
+    }
+
+    const snapshot = await query.get();
+    let users = snapshot.docs
+      .filter((doc) => doc.id !== user.uid)
+      .map((doc) => normalizeProfile(doc.data() as UserProfile));
+
+    if (eligibleOnly) {
+      users = users.filter((u) => u.invite_eligible);
+    }
+
+    res.status(200).json(users);
+  } catch (error: unknown) {
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};
+
+export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    requireUser(req);
+    const userId = getString(req.params.userId, 'userId');
+    const doc = await db.collection('users').doc(userId).get();
+    if (!doc.exists) {
+      throw new ApiError(404, 'User not found');
+    }
+    res.status(200).json(normalizeProfile(doc.data() as UserProfile));
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ message: error.message });
+      return;
+    }
+    res.status(500).json({ message: 'Failed to fetch user profile' });
   }
 };
