@@ -8,6 +8,7 @@ import interviewRoutes from './routes/interview.routes';
 import postRoutes from './routes/post.routes';
 import projectRoutes from './routes/project.routes';
 import userRoutes from './routes/user.routes';
+import conversationRoutes from './routes/conversation.routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/interviews', interviewRoutes);
+app.use('/api/conversations', conversationRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

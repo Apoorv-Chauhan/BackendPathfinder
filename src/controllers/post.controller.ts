@@ -39,7 +39,7 @@ export const listPosts = async (
       ...doc.data(),
     })) as Array<{ id: string } & PostDocument>;
 
-    res.status(200).json({ posts, nextCursor: posts.length === limit ? posts[posts.length - 1].createdAt : null });
+    res.status(200).json({ posts, nextCursor: posts.length === limit ? (posts[posts.length - 1]?.createdAt ?? null) : null });
   } catch (error: unknown) {
     if (error instanceof Error) {
       res.status(500).json({ message: error.message });

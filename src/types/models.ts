@@ -102,3 +102,33 @@ export interface FeedbackDocument {
   };
   createdAt: string;
 }
+
+export interface ConversationDocument {
+  participants: string[];
+  recipientKey: string;
+  recipientId: string | null;
+  recipientName: string;
+  recipientAvatar?: string;
+  createdById: string;
+  createdByName: string;
+  createdByAvatar?: string;
+  participantProfiles: Record<string, {
+    name: string;
+    avatar: string;
+    email: string;
+  }>;
+  lastMessage: string;
+  createdAt: string;
+  updatedAt: string;
+  unreadCounts: Record<string, number>;
+  blockedBy: string[];
+  hiddenFor: string[];
+}
+
+export interface MessageDocument {
+  conversationId: string;
+  senderId: string;
+  text: string;
+  readBy: string[];
+  createdAt: string;
+}
