@@ -5,6 +5,7 @@ import {
   getGroupById,
   getGroups,
   updateGroup,
+  acceptGroupInvite,
 } from '../controllers/group.controller';
 import { verifyToken } from '../middleware/auth.middleware';
 
@@ -17,5 +18,6 @@ router.post('/', createGroup);
 router.get('/:groupId', getGroupById);
 router.patch('/:groupId', updateGroup);
 router.delete('/:groupId', deleteGroup);
+router.post('/accept-invite', acceptGroupInvite);
 
 export default router;

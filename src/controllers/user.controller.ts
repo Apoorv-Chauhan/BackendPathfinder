@@ -28,14 +28,17 @@ const calculateProfileCompletion = (profile: UserProfile): number => {
 
 const getEligibility = (profile: UserProfile): { eligible: boolean; missing: string[] } => {
   const missing: string[] = [];
-  if (!profile.first_name || !profile.last_name) missing.push('Full Name');
+  if (!profile.first_name) missing.push('Name (First Name)');
   if (!Array.isArray(profile.skills) || profile.skills.length === 0) missing.push('At least 1 Skill');
   if (!profile.target_role) missing.push('Target Role');
   if (!profile.is_available_for_interview) missing.push('Availability Toggle ON');
   if (!profile.timezone) missing.push('Timezone');
   if (!Array.isArray(profile.availability) || profile.availability.length === 0) missing.push('At least 1 Availability Slot');
-  if (!profile.email_verified) missing.push('Email Verification');
-  if ((profile.profile_completion_percentage || 0) < 60) missing.push('Profile Completion >= 60%');
+  
+  // Relaxed for MVP: email_verified and last_name are no longer strictly required for eligibility
+  // if (!profile.email_verified) missing.push('Email Verification');
+  
+  if ((profile.profile_completion_percentage || 0) < 40) missing.push('Profile Completion >= 40%');
   return { eligible: missing.length === 0, missing };
 };
 
@@ -179,6 +182,7 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
     if (eligibleOnly) {
       query = query.where('is_available_for_interview', '==', true);
     }
+
 
     const snapshot = await query.get();
     let users = snapshot.docs

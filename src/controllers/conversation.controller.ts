@@ -196,14 +196,18 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
       }
     });
 
-    const msgRef = await convRef.collection('messages').add(messagePayload);
+    const batch = db.batch();
+    const msgRef = convRef.collection('messages').doc();
+    batch.set(msgRef, messagePayload);
     
-    await convRef.set({
+    batch.set(convRef, {
       lastMessage: text,
       updatedAt: now,
       hiddenFor: [],
       unreadCounts: newUnreadCounts,
     }, { merge: true });
+
+    await batch.commit();
 
     res.status(201).json({ id: msgRef.id, ...messagePayload });
   } catch (error: unknown) {

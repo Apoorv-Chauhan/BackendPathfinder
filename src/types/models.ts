@@ -148,5 +148,7 @@ export interface GroupDocument {
   tags?: string[];
   rules?: string[];
   coverImage?: string;
+  maxMembers?: number;
   createdAt: string;
+  updatedAt: string;
 }

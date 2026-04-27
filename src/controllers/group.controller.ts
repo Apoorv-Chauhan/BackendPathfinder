@@ -19,7 +19,9 @@ const normalizeGroup = (id: string, data: any): GroupDocument => ({
   tags: data.tags || [],
   rules: data.rules || [],
   coverImage: data.coverImage || null,
+  maxMembers: data.maxMembers || 5,
   createdAt: data.createdAt || new Date().toISOString(),
+  updatedAt: data.updatedAt || data.createdAt || new Date().toISOString(),
 });
 
 export const getGroups = async (req: Request, res: Response): Promise<void> => {
@@ -140,5 +142,83 @@ export const deleteGroup = async (req: Request, res: Response): Promise<void> =>
       return;
     }
     res.status(500).json({ message: 'Failed to delete group' });
+  }
+};
+
+export const acceptGroupInvite = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = requireUser(req);
+    const { inviteId } = req.body;
+    if (!inviteId) throw new ApiError(400, 'inviteId is required');
+
+    const inviteSnap = await db.collection('groupInvites').doc(inviteId).get();
+    if (!inviteSnap.exists) throw new ApiError(404, 'Invite not found');
+
+    const invite = inviteSnap.data() as any;
+    if (invite.status !== 'active') throw new ApiError(400, 'Invite is no longer active');
+
+    const groupRef = db.collection('groups').doc(invite.groupId);
+    const groupSnap = await groupRef.get();
+    if (!groupSnap.exists) throw new ApiError(404, 'Group not found');
+
+    const groupData = groupSnap.data();
+    if (!groupData) throw new ApiError(404, 'Group data is empty');
+    const group = normalizeGroup(groupSnap.id, groupData);
+
+    // Verify inviter is still the owner
+    if (invite.inviterId !== group.ownerId) {
+      throw new ApiError(400, 'This invite is no longer valid (owner changed)');
+    }
+
+    // Build member profile
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    const userData = userDoc.data() || {};
+    const memberProfile = {
+      name: userData.name || user.email?.split('@')[0] || 'User',
+      avatar: userData.photo_url || (userData.name ? userData.name.charAt(0) : 'U'),
+      email: user.email || '',
+      role: user.uid === group.ownerId ? 'Owner' : 'Member',
+    };
+
+    // Check if blocked
+    const isBlocked = (group.blockedMemberIds || []).includes(user.uid) || 
+                      (group.blockedMembers || []).includes(memberProfile.name);
+    if (isBlocked) throw new ApiError(403, 'You are blocked from this group');
+
+    // Check if full
+    const existingMemberIds = group.memberIds || [];
+    if (!existingMemberIds.includes(user.uid) && group.maxMembers && existingMemberIds.length >= group.maxMembers) {
+      throw new ApiError(400, 'This group is already full');
+    }
+
+    // Update group
+    const updatedMembers = Array.from(new Set([...(group.members || []), memberProfile.name]));
+    const updatedMemberIds = Array.from(new Set([...existingMemberIds, user.uid]));
+    const updatedMemberProfiles = {
+      ...(group.memberProfiles || {}),
+      [user.uid]: memberProfile,
+    };
+
+    await groupRef.update({
+      members: updatedMembers,
+      memberIds: updatedMemberIds,
+      memberProfiles: updatedMemberProfiles,
+      memberCount: updatedMembers.length,
+      updatedAt: new Date().toISOString(),
+    });
+
+    res.status(200).json(normalizeGroup(groupRef.id, {
+      ...group,
+      members: updatedMembers,
+      memberIds: updatedMemberIds,
+      memberProfiles: updatedMemberProfiles,
+      memberCount: updatedMembers.length,
+    }));
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ message: error.message });
+      return;
+    }
+    res.status(500).json({ message: 'Failed to accept group invite' });
   }
 };
